@@ -3059,19 +3059,31 @@ function updateAuthChip(synced) {
 // ── Sign out ──────────────────────────────────────────────────
 async function doSignOut() {
   dbg('doSignOut called');
-  // 1. Set flag first so INITIAL_SESSION is blocked on next load
   _userSignedOut = true;
   localStorage.setItem('wv_signed_out', '1');
-  // 2. Clear user immediately so UI updates
   _sbUser = null;
-  updateAuthChip();
-  // 3. Wipe supabase's own session keys BEFORE calling signOut
-  //    so it can't restore the session in the onAuthStateChange callback
+
+  // Clear local data so another user can't see it
+  DB = { languages: {}, quiz_history: [] };
+  localStorage.removeItem(STORAGE_KEY);
+
+  // Wipe supabase session keys
   Object.keys(localStorage).forEach(k => {
     if (k.startsWith('sb-') || k.includes('supabase')) localStorage.removeItem(k);
   });
-  // 4. Tell Supabase to sign out (may fail if keys already gone, that's fine)
+
   try { await sb.auth.signOut(); } catch(e) {}
+
+  // Update UI to empty state
+  updateAuthChip();
+  renderSidebar();
+  showDetailEmpty();
+  document.getElementById('lang-title').textContent = 'Select a language →';
+  document.getElementById('lang-subtitle').textContent = '';
+  document.getElementById('entry-list-wrap').innerHTML = '';
+  currentLang = null;
+  currentEntryIdx = null;
+
   dbg('doSignOut complete');
   toast('Signed out', 'info');
 }
@@ -3187,7 +3199,7 @@ function openAuthModal() {
     } else {
       const { data, error } = await sb.auth.signUp({
         email, password: pw,
-        options: { emailRedirectTo: 'https://wordvault-lexicon.netlify.app' }
+        options: { emailRedirectTo: 'https://thatszizo.github.io/wordvault/' }
       });
       if (error) { showError(error.message); return; }
       if (data?.user && !data.session) {
@@ -3239,6 +3251,8 @@ function initSupabase() {
       dbg('INITIAL_SESSION: restoring session for ' + session.user.email);
       _sbUser = session.user;
       updateAuthChip();
+      // Small delay — lets Supabase fully initialize auth headers before querying
+      await new Promise(r => setTimeout(r, 500));
       await pullFromCloud();
       return;
     }
