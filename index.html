@@ -2965,7 +2965,14 @@ function showDebugBtn() {
 
 const SB_URL = 'https://rakujwamalvegziytypy.supabase.co';
 const SB_KEY = 'sb_publishable_F7sI5PjQhEYLXWCOVhfx8Q_toNK1EG4';
-const sb = window.supabase ? supabase.createClient(SB_URL, SB_KEY) : null;
+const sb = window.supabase ? supabase.createClient(SB_URL, SB_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    lock: () => ({ release: () => {} }), // disable Web Locks — broken in some browsers
+  }
+}) : null;
 
 let _sbUser = null;
 let _userSignedOut = localStorage.getItem('wv_signed_out') === '1';
