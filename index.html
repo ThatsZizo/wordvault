@@ -2996,7 +2996,17 @@ async function pullFromCloud() {
   if (!sb || !_sbUser) { dbg('pullFromCloud: no user, skipping'); return; }
   dbg('pullFromCloud: starting for ' + _sbUser.email);
   try {
-    dbg('pullFromCloud: querying vaultdata table...');
+    // Ensure session is fully ready before querying — retry up to 5x
+    let sessionReady = false;
+    for (let i = 0; i < 5; i++) {
+      try {
+        const { data: sd } = await sb.auth.getSession();
+        if (sd?.session?.access_token) { sessionReady = true; break; }
+      } catch(se) { dbg('getSession attempt ' + (i+1) + ' failed: ' + se.message, 'warn'); }
+      await new Promise(r => setTimeout(r, 400));
+    }
+    if (!sessionReady) { dbg('pullFromCloud: session not ready after retries', 'err'); return; }
+    dbg('pullFromCloud: session ready, querying vaultdata table...');
 
     // Use maybeSingle() — never hangs, returns null if no row found
     const { data, error } = await sb
@@ -3258,8 +3268,6 @@ function initSupabase() {
       dbg('INITIAL_SESSION: restoring session for ' + session.user.email);
       _sbUser = session.user;
       updateAuthChip();
-      // Small delay — lets Supabase fully initialize auth headers before querying
-      await new Promise(r => setTimeout(r, 500));
       await pullFromCloud();
       return;
     }
